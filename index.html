@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no,viewport-fit=cover">
+  <title>AR Gallery — Marker-Based AR Experience</title>
+  <meta name="description" content="Universal marker-based AR gallery. Works on any smartphone browser.">
+
+  <!-- A-Frame + AR.js + Look-At (REQUIRED for images to face camera) -->
+  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body, html {
+      width: 100%; height: 100%; overflow: hidden; background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* ═══ START SCREEN ═══ */
+    #startScreen {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 28px;
+      background: linear-gradient(170deg, #0a0a1a 0%, #0d1b2a 100%);
+      color: #fff; transition: opacity 0.5s ease;
+    }
+    #startScreen.fade-out { opacity: 0; pointer-events: none; }
+    #startScreen.gone     { display: none; }
+
+    #startScreen h1 {
+      font-size: clamp(1.8rem, 6vw, 2.6rem); font-weight: 800;
+      background: linear-gradient(90deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+    .sub  { font-size: .9rem; opacity: .5; margin-bottom: 28px; }
+    .step { font-size: .82rem; color: #fbbf24; margin-bottom: 12px; font-weight: 600; }
+    .marker-card {
+      background: #fff; border-radius: 18px; padding: 14px;
+      box-shadow: 0 25px 60px rgba(0,0,0,.8); margin-bottom: 14px;
+    }
+    .marker-card img { display: block; width: 155px; height: 155px; }
+    .hint { font-size: .78rem; opacity: .5; max-width: 270px; line-height: 1.6; margin-bottom: 28px; }
+    .btn-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 14px 26px; font-size: .95rem; font-weight: 700;
+      border: none; border-radius: 14px; cursor: pointer;
+      transition: transform .15s; outline: none;
+    }
+    .btn:active { transform: scale(.95); }
+    .btn-primary { background: linear-gradient(135deg,#3b82f6,#6366f1); color:#fff; box-shadow: 0 6px 20px rgba(99,102,241,.4); }
+    .btn-ghost   { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); color: #fff; }
+    .btn-sm      { padding: 9px 18px; font-size: .8rem; border-radius: 10px; }
+
+    /* ═══ HUD ═══ */
+    #hud {
+      position: fixed; top: 0; left: 0; right: 0;
+      display: none; align-items: center; justify-content: space-between;
+      padding: 16px; z-index: 8000; pointer-events: none;
+    }
+    .pill {
+      background: rgba(0,0,0,.65); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,.12);
+      padding: 8px 16px; border-radius: 22px;
+      color: #7dd3fc; font-weight: 700; font-size: .78rem;
+      pointer-events: auto; cursor: pointer;
+    }
+
+    /* ═══ Controls ═══ */
+    #controls {
+      position: fixed; bottom: 36px; left: 0; right: 0;
+      display: none; justify-content: center; gap: 12px;
+      padding: 0 20px; z-index: 8000;
+    }
+    #controls .btn { pointer-events: auto; }
+
+    /* ═══ Toast ═══ */
+    #toast {
+      position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,.72); backdrop-filter: blur(8px);
+      color: #fff; padding: 10px 22px; border-radius: 30px;
+      font-size: .84rem; z-index: 8000; opacity: 0;
+      transition: opacity .4s; pointer-events: none; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- ═════════ START SCREEN ═════════ -->
+<div id="startScreen">
+  <h1>✦ AR Gallery</h1>
+  <p class="sub">Universal AR — Works on any phone</p>
+  <p class="step">Step 1 — Show this Hiro Marker on your PC:</p>
+  <div class="marker-card">
+    <img src="https://ar-js-org.github.io/AR.js/data/images/HIRO.jpg" alt="Hiro AR Marker">
+  </div>
+  <p class="hint">Point your phone camera at the marker on your PC screen. Photos will float above it.</p>
+  <div class="btn-row">
+    <button class="btn btn-primary" id="startBtn">📷 Launch Camera</button>
+    <button class="btn btn-ghost btn-sm" onclick="copyMarker()">Copy Marker URL</button>
+  </div>
+</div>
+
+<!-- ═════════ HUD ═════════ -->
+<div id="hud">
+  <div class="pill" id="modeLabel">SINGLE</div>
+  <button class="pill" id="toggleMode">☰ Gallery</button>
+</div>
+
+<!-- ═════════ CONTROLS ═════════ -->
+<div id="controls">
+  <button class="btn btn-ghost btn-sm" id="prevBtn">‹ Prev</button>
+  <button class="btn btn-ghost btn-sm" id="nextBtn">Next ›</button>
+</div>
+
+<div id="toast"></div>
+
+<!-- ═════════════════════════════════════════════
+     AR SCENE — KEY FIXES:
+     1. NO 'embedded' — AR.js renders live camera
+     2. look-at="[camera]" — images ALWAYS face phone
+     3. smoothCount=30 — near-zero hand-shake jitter
+     4. Images positioned in front of marker face
+═══════════════════════════════════════════════ -->
+<a-scene
+  vr-mode-ui="enabled: false"
+  arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; maxDetectionRate: 60;"
+  renderer="alpha: true; antialias: true; logarithmicDepthBuffer: true;">
+
+  <a-assets timeout="15000">
+    <img id="img0" src="images/photo1.jpg"   crossorigin="anonymous">
+    <img id="img1" src="images/gallery1.png" crossorigin="anonymous">
+    <img id="img2" src="images/gallery2.png" crossorigin="anonymous">
+    <img id="img3" src="images/gallery3.png" crossorigin="anonymous">
+    <img id="img4" src="images/gallery4.png" crossorigin="anonymous">
+  </a-assets>
+
+  <!--
+    MAXIMUM STABILITY:
+    smoothCount  = 30  (average over last 30 frames)
+    smoothTolerance = 0.001  (ignore micro-movements)
+    smoothThreshold = 3  (big jump needed to reset)
+  -->
+  <a-marker preset="hiro"
+    smooth="true"
+    smoothCount="30"
+    smoothTolerance="0.001"
+    smoothThreshold="3">
+
+    <!-- SINGLE: one big photo. look-at makes it always face the camera front-on -->
+    <a-image id="singlePhoto" src="#img0"
+      position="0 0 0"
+      scale="3 3 3"
+      look-at="[camera]"
+      visible="true">
+    </a-image>
+
+    <!--
+      GALLERY: 5 images in a flat fan arrangement.
+      All use look-at="[camera]" so they ALWAYS face you no matter the angle.
+      Spread along X axis, small Z offset creates subtle depth curve.
+    -->
+    <a-entity id="galleryRing" visible="false">
+      <a-image src="#img0" position="-2.5 0 0.4" scale="1.6 1.6 1.6" look-at="[camera]"></a-image>
+      <a-image src="#img1" position="-1.2 0 0.1" scale="1.6 1.6 1.6" look-at="[camera]"></a-image>
+      <a-image src="#img2" position=" 0   0 0  " scale="1.8 1.8 1.8" look-at="[camera]"></a-image>
+      <a-image src="#img3" position=" 1.2 0 0.1" scale="1.6 1.6 1.6" look-at="[camera]"></a-image>
+      <a-image src="#img4" position=" 2.5 0 0.4" scale="1.6 1.6 1.6" look-at="[camera]"></a-image>
+    </a-entity>
+
+  </a-marker>
+
+  <a-entity camera></a-entity>
+
+</a-scene>
+
+<script>
+const IMAGE_IDS   = ['#img0','#img1','#img2','#img3','#img4'];
+const IMAGE_NAMES = ['Your Photo','Mountain Lake','Abstract Art','Cyberpunk City','Architecture'];
+let currentIdx = 0;
+let isGallery  = false;
+
+const startScreen   = document.getElementById('startScreen');
+const hud           = document.getElementById('hud');
+const controlsEl    = document.getElementById('controls');
+const modeLabel     = document.getElementById('modeLabel');
+const toggleModeBtn = document.getElementById('toggleMode');
+const singlePhoto   = document.getElementById('singlePhoto');
+const galleryRing   = document.getElementById('galleryRing');
+const prevBtn       = document.getElementById('prevBtn');
+const nextBtn       = document.getElementById('nextBtn');
+const toastEl       = document.getElementById('toast');
+
+let toastTimer;
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2600);
+}
+
+function copyMarker() {
+  const url = 'https://ar-js-org.github.io/AR.js/data/images/HIRO.jpg';
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url)
+      .then(() => alert('Copied!\nOpen on your PC browser:\n' + url))
+      .catch(() => prompt('Copy and open on PC:', url));
+  } else { prompt('Copy and open on PC:', url); }
+}
+window.copyMarker = copyMarker;
+
+document.getElementById('startBtn').addEventListener('click', async () => {
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try { await DeviceOrientationEvent.requestPermission(); } catch (_) {}
+  }
+  startScreen.classList.add('fade-out');
+  setTimeout(() => startScreen.classList.add('gone'), 500);
+  hud.style.display = 'flex';
+  controlsEl.style.display = 'flex';
+  showToast('Point camera at Hiro marker');
+});
+
+function setImage(idx) {
+  currentIdx = ((idx % IMAGE_IDS.length) + IMAGE_IDS.length) % IMAGE_IDS.length;
+  singlePhoto.setAttribute('src', IMAGE_IDS[currentIdx]);
+  showToast(IMAGE_NAMES[currentIdx]);
+}
+prevBtn.addEventListener('click', () => setImage(currentIdx - 1));
+nextBtn.addEventListener('click', () => setImage(currentIdx + 1));
+
+toggleModeBtn.addEventListener('click', () => {
+  isGallery = !isGallery;
+  if (isGallery) {
+    modeLabel.textContent     = 'GALLERY';
+    toggleModeBtn.textContent = '✕ Single';
+    singlePhoto.setAttribute('visible', 'false');
+    galleryRing.setAttribute('visible', 'true');
+    prevBtn.style.display = 'none';
+    nextBtn.style.display = 'none';
+    showToast('Gallery — all 5 photos');
+  } else {
+    modeLabel.textContent     = 'SINGLE';
+    toggleModeBtn.textContent = '☰ Gallery';
+    singlePhoto.setAttribute('visible', 'true');
+    galleryRing.setAttribute('visible', 'false');
+    prevBtn.style.display = '';
+    nextBtn.style.display = '';
+    showToast(IMAGE_NAMES[currentIdx]);
+  }
+});
+</script>
+</body>
+</html>
